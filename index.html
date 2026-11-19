@@ -169,7 +169,8 @@ addEventListener('keydown',e=>{
   keys[k]=true;
   if(k==='f'){toggleFS();return;}
   if(G.state==='title'&&k==='d'){toggleEasy();return;}
-  if(G.state!=='play'){if(k===' '||k==='enter'||k==='z')advance();return;}
+  if(G.state==='brief'&&(k==='arrowleft'||k==='backspace'||k==='a')){briefBack();return;}
+  if(G.state!=='play'){if(k===' '||k==='enter'||k==='z'||(G.state==='brief'&&(k==='arrowright'||k==='d')))advance();return;}
   if(k==='x'||k==='shift'||k==='k'||k==='e')changeForm();
   if(k==='1'||k==='2'||k==='3'||k==='4')setForm(+k-1);
   if(k==='p'||k==='escape')paused=!paused;
@@ -184,13 +185,22 @@ cv.addEventListener('pointerdown',e=>{
   if(e.button!==2&&inFS(q)){fsPress=true;return;}
   if(e.button===2){if(G.state==='play')changeForm();return;}
   if(G.state==='title'&&q.y>850&&q.y<905){toggleEasy();return;}
+  if(G.state==='brief'){bsw={x:q.x};return;}
   if(G.state!=='play'){advance();return;}
   if(paused){paused=false;return;}
   for(let i=0;i<4;i++){const b=PAN(i);if(q.x>b.x&&q.x<b.x+b.w&&q.y>b.y&&q.y<b.y+b.h){setForm(i);return;}}
   if(q.x>FBTN.x&&q.x<FBTN.x+FBTN.w&&q.y>FBTN.y&&q.y<FBTN.y+FBTN.h){changeForm();return;}
   ptr={id:e.pointerId,x:q.x,y:q.y};ptrFire=true;try{cv.setPointerCapture(e.pointerId);}catch(_){}
 });
-cv.addEventListener('pointerup',e=>{if(!fsPress)return;fsPress=false;if(inFS(toCanvas(e)))toggleFS();});
+let bsw=null;
+cv.addEventListener('pointerup',e=>{
+  const q=toCanvas(e);
+  if(fsPress){fsPress=false;if(inFS(q))toggleFS();return;}
+  if(bsw&&G.state==='brief'){const dx=q.x-bsw.x;bsw=null;
+    if(Math.abs(dx)>50){if(dx<0)advance();else briefBack();return;}
+    if((G.briefPage||0)>0&&q.x>BK.x&&q.x<BK.x+BK.w&&q.y>BK.y&&q.y<BK.y+BK.h){briefBack();return;}
+    advance();}
+});
 cv.addEventListener('pointercancel',()=>{fsPress=false;});
 cv.addEventListener('pointermove',e=>{
   if(!ptr||e.pointerId!==ptr.id||G.state!=='play'||paused)return;
@@ -220,11 +230,12 @@ function newGame(state){
     p:{x:W/2,y:H-170,inv:2,fire:0,bomb:0,form:3,fcd:0,dead:0,tilt:0},
     wing:[],pb:[],bombs:[],eb:[],en:[],rec:[],pk:[],parts:[],rings:[],fl:[],
     waveT:1.5,recT:3,bossT:0,boss:null,shake:0,banner:null,overT:0,firstWave:true};
-  if(state==='play'){G.state='brief';G.briefT=0;}
+  if(state==='play'){G.state='brief';G.briefT=0;G.briefPage=0;G.briefPT=0;}
 }
 function startGame(){newGame('play');paused=false;}
+function briefBack(){if(G.state==='brief'&&(G.briefPage||0)>0){G.briefPage--;G.briefPT=0;}}
 function advance(){
-  if(G.state==='brief'){if(G.briefT>.5){G.state='play';stageBanner(Math.min(G.stage,5));}return;}
+  if(G.state==='brief'){if(G.briefT<=.5)return;const pg=G.briefPage||0;if(pg<2){G.briefPage=pg+1;G.briefPT=0;return;}G.state='play';stageBanner(Math.min(G.stage,5));return;}
   if(G.state==='win'){if(G.winT<2.5)return;if(G.winPage===0){G.winPage=1;return;}}
   startGame();
 }
@@ -381,7 +392,7 @@ function updateBoss(dt){
       G.stage++;G.waveT=3;
       if(G.lives<5)G.pk.push({x:b.x,y:b.y,t:0});
       G.themes.push({row:Math.ceil(scroll/90)+1,s:G.stage});
-      G.state='brief';G.briefT=0;
+      G.state='brief';G.briefT=0;G.briefPage=0;G.briefPT=0;
     }
     return;
   }
@@ -507,7 +518,7 @@ function update(dt){
   const p=G.p;
   if(G.state==='title'){return;}
   if(G.state==='win'){G.winT+=dt;return;}
-  if(G.state==='brief'){G.briefT+=dt;return;}
+  if(G.state==='brief'){G.briefT+=dt;G.briefPT=(G.briefPT||0)+dt;return;}
   if(p.inv>0)p.inv-=dt;if(p.fcd>0)p.fcd-=dt;
   if(G.comboT>0){G.comboT-=dt;if(G.comboT<=0){G.combo=0;G.mult=1;}}
   if(G.state==='over'){return;}
@@ -1636,40 +1647,54 @@ function wrapText(s,max,size){
   for(const w of words){const t=line?line+' '+w:w,m=ctx.measureText(t),wd=(m&&m.width)||t.length*size*.48;if(wd>max&&line){out.push(line);line=w;}else line=t;}
   if(line)out.push(line);return out;
 }
-function briefLayout(B,fs){
-  const lh=Math.round(fs*1.36);
-  const paras=B.text.map(t=>wrapText(t,450,fs)),fact=wrapText(B.fact,430,fs-1),mis=wrapText(B.mission,450,fs);
-  let y=330;paras.forEach(a=>{y+=a.length*lh+10;});
-  y+=8;const fy=y,bh=fact.length*lh+44;y+=bh+30;const my=y;y+=mis.length*lh+30;
-  return{lh,paras,fact,mis,fy,bh,my,end:y};
+const BK={x:36,y:826,w:150,h:70},NX={x:200,y:826,w:304,h:70};
+function briefFit(paras,maxW,avail,maxFs){
+  let out=null;
+  for(let fs=maxFs;fs>=22;fs--){const lh=Math.round(fs*1.34),L=paras.map(t=>wrapText(t,maxW,fs));let n=0;L.forEach(a=>n+=a.length);
+    out={fs,lh,L,h:n*lh+(L.length-1)*16};if(out.h<=avail)break;}
+  return out;
 }
 function drawBrief(){
-  const st=Math.min(G.stage,5),B=BRIEF[st],a=Math.min(1,G.briefT*3);
-  ctx.fillStyle='rgba(8,8,4,.74)';ctx.fillRect(0,0,W,H);
+  const st=Math.min(G.stage,5),B=BRIEF[st],pg=G.briefPage||0;
+  const a=Math.min(1,G.briefT*3)*Math.min(1,.3+(G.briefPT||0)*6);
+  ctx.fillStyle='rgba(6,5,3,.98)';ctx.fillRect(0,0,W,H);
   ctx.globalAlpha=a;
-  panel(24,22,492,866,false);
-  txt('DIÁRIO DE MISSÃO · '+(st+1)+' DE 6',W/2,54,14,AMBER,'center','Oswald',600);
-  txt(B.title,W/2,100,B.title.length>14?27:38,CREAM,'center');
-  txt(B.date,W/2,128,16,'#cdbf94','center','Oswald',500);
-  ctx.fillStyle='rgba(240,180,60,.5)';ctx.fillRect(44,140,452,1.5);
+  ctx.fillStyle='#17140c';rr(16,16,508,928,14);ctx.fill();ctx.strokeStyle='rgba(240,180,60,.75)';ctx.lineWidth=2;ctx.stroke();
+  txt('DIÁRIO DE MISSÃO · '+(st+1)+' DE 6',W/2,56,18,AMBER,'center','Oswald',600);
+  txt(B.title,W/2,106,B.title.length>18?30:(B.title.length>14?34:46),'#fff6dc','center');
+  txt(B.date,W/2,140,21,'#e4d9b4','center','Oswald',500);
+  ctx.fillStyle='rgba(240,180,60,.6)';ctx.fillRect(44,154,452,2);
   const ph=BPHOTO[st],art=ph||BART[st]||(BART[st]=baMake(st));
-  ctx.save();rr(44,152,452,150,8);ctx.clip();
-  if(ph){const r=Math.max(452/ph.width,150/ph.height),w=ph.width*r,h=ph.height*r;ctx.drawImage(ph,44+(452-w)/2,152+(150-h)/2,w,h);}
-  else ctx.drawImage(art,44,152,452,150);
+  ctx.save();rr(44,168,452,150,8);ctx.clip();
+  if(ph){const r=Math.max(452/ph.width,150/ph.height),w=ph.width*r,h=ph.height*r;ctx.drawImage(ph,44+(452-w)/2,168+(150-h)/2,w,h);}
+  else ctx.drawImage(art,44,168,452,150);
   ctx.restore();
-  rr(44,152,452,150,8);ctx.strokeStyle='rgba(240,180,60,.7)';ctx.lineWidth=2;ctx.stroke();
-  if(!ph)txt('ILUSTRAÇÃO',488,296,10,'rgba(239,230,200,.8)','right','Oswald',500);
-  let fs=19,L=briefLayout(B,fs);while(L.end>838&&fs>14){fs--;L=briefLayout(B,fs);}
-  let y=330;txt('O QUE ACONTECEU',44,y-6,14,AMBER,'left','Oswald',600);
-  for(const par of L.paras){for(const ln of par){y+=L.lh;txt(ln,44,y,fs,CREAM,'left','Oswald',500);}y+=10;}
-  ctx.fillStyle='rgba(74,64,28,.6)';rr(40,L.fy,460,L.bh,8);ctx.fill();ctx.strokeStyle='rgba(240,180,60,.6)';ctx.lineWidth=1.5;ctx.stroke();
-  txt('VOCÊ SABIA?',54,L.fy+24,14,AMBER,'left','Oswald',600);
-  L.fact.forEach((ln,i)=>txt(ln,54,L.fy+24+L.lh*(i+1),fs-1,CREAM,'left','Oswald',500));
-  txt('SUA MISSÃO',44,L.my,14,AMBER,'left','Oswald',600);
-  L.mis.forEach((ln,i)=>txt(ln,44,L.my+L.lh*(i+1),fs,CREAM,'left','Oswald',500));
-  txt('Os chefes e as armas gigantes são inventados · o resto é história de verdade.',W/2,872,13,'#8a8770','center','Oswald',500);
+  rr(44,168,452,150,8);ctx.strokeStyle='rgba(240,180,60,.8)';ctx.lineWidth=2;ctx.stroke();
+  if(!ph)txt('ILUSTRAÇÃO',486,312,12,'rgba(255,246,220,.85)','right','Oswald',500);
+  const label=['O QUE ACONTECEU','VOCÊ SABIA?','SUA MISSÃO'][pg],paras=[B.text,[B.fact],[B.mission]][pg];
+  txt(label,44,362,24,AMBER,'left','Oswald',600);
+  const F=briefFit(paras,pg===1?420:452,pg===2?340:394,[30,36,34][pg]);
+  let y=384;
+  if(pg===1){
+    const bh=F.h+F.lh*.9;ctx.fillStyle='rgba(74,64,28,.85)';rr(40,y,460,bh+8,12);ctx.fill();ctx.strokeStyle='rgba(240,180,60,.8)';ctx.lineWidth=2;ctx.stroke();
+    y+=18;
+  }
+  const tx=pg===1?58:44;
+  F.L.forEach((arr,pi)=>{arr.forEach(ln=>{y+=F.lh;txt(ln,tx,y-4,F.fs,'#fff6dc','left','Oswald',500);});y+=16;});
+  if(pg===2){
+    const nt=wrapText('Os chefes e as armas gigantes são inventados. O resto é história de verdade.',452,17);
+    nt.forEach((ln,i)=>txt(ln,44,772+i*22,17,'#cfc7a6','left','Oswald',500));
+  }
+  for(let i=0;i<3;i++){ctx.fillStyle=i===pg?AMBER:'rgba(240,180,60,.3)';ctx.beginPath();ctx.arc(W/2+(i-1)*26,808,i===pg?7:5,0,TAU);ctx.fill();}
+  if(pg>0){ctx.strokeStyle=AMBER;ctx.lineWidth=2.5;rr(BK.x,BK.y,BK.w,BK.h,12);ctx.stroke();
+    txt('VOLTAR',BK.x+BK.w/2+20,BK.y+45,26,'#fff6dc','center','Oswald',600);
+    ctx.fillStyle=AMBER;ctx.beginPath();ctx.moveTo(BK.x+20,BK.y+35);ctx.lineTo(BK.x+34,BK.y+25);ctx.lineTo(BK.x+34,BK.y+45);ctx.fill();}
+  ctx.fillStyle=AMBER;rr(NX.x,NX.y,NX.w,NX.h,12);ctx.fill();
+  const nl=pg<2?'PRÓXIMO':(st===0?'DECOLAR!':'CONTINUAR');
+  txt(nl,NX.x+NX.w/2-12,NX.y+46,30,'#1a1408','center','Oswald',600);
+  ctx.fillStyle='#1a1408';ctx.beginPath();ctx.moveTo(NX.x+NX.w-52,NX.y+24);ctx.lineTo(NX.x+NX.w-34,NX.y+35);ctx.lineTo(NX.x+NX.w-52,NX.y+46);ctx.fill();
+  txt('ESPAÇO ou ← → para navegar  ·  ou deslize a tela',W/2,922,16,'#b8b296','center','Oswald',500);
   ctx.globalAlpha=1;
-  if(G.briefT>.5&&Math.floor(G.t*2)%2===0)txt(st===0?'TOQUE OU PRESSIONE ESPAÇO PARA DECOLAR':'TOQUE OU PRESSIONE ESPAÇO PARA CONTINUAR',W/2,918,17,CREAM,'center');
 }
 const TL=[['1940–44','Londres','bombardeios, Blitz e bombas voadoras'],['6 jun 1944','Normandia','o Dia D, início da libertação'],['dez 1944–jan 1945','Ardenas','último grande ataque alemão'],
  ['mar 1945','Reno','a ponte de Remagen'],['8 mai 1945','Berlim','fim da guerra na Europa'],['ago–set 1945','Japão','fim da Segunda Guerra']];
