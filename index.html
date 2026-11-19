@@ -77,9 +77,45 @@ const SFX={
   form(){tone(400,.12,'triangle',.12,500);tone(800,.1,'triangle',.08,-300,ac&&ac.currentTime+.08);},
   up(){[784,988,1175,1568].forEach((f,i)=>tone(f,.15,'triangle',.09,0,ac&&ac.currentTime+i*.08));},
   alarm(){for(let i=0;i<4;i++)tone(i%2?420:620,.25,'sawtooth',.08,0,ac&&ac.currentTime+i*.28);},
-  over(){[392,330,262,196].forEach((f,i)=>tone(f,.4,'triangle',.12,0,ac&&ac.currentTime+i*.3));}
+  over(){if(audioState==='ok')return;[392,330,262,196].forEach((f,i)=>tone(f,.4,'triangle',.12,0,ac&&ac.currentTime+i*.3));}
 };
 function sfx(n){try{if(ac)SFX[n]();}catch(e){}}
+/* trilha por arquivos (pasta audio/); sem os arquivos, cai na música sintetizada */
+const AFILES={credit:'credit.mp3',start:'start.mp3',main:'main.mp3',bi:'boss-intro.mp3',bl:'boss-loop.mp3',over:'gameover.mp3',win:'nameentry.mp3'};
+const AUD={};let audioState='loading',audioOk=0,curKey=null,curEl=null,wasPaused=false;
+(function loadAudio(){
+  const ks=Object.keys(AFILES);
+  ks.forEach(k=>{
+    const a=new Audio();a.preload='auto';
+    a.addEventListener('canplaythrough',()=>{if(++audioOk===ks.length&&audioState==='loading')audioState='ok';},{once:true});
+    a.addEventListener('error',()=>{audioState='none';});
+    a.src='audio/'+AFILES[k];AUD[k]=a;
+  });
+  setTimeout(()=>{if(audioState==='loading')audioState='none';},8000);
+})();
+function aStop(){for(const k in AUD){const a=AUD[k];a.pause();a.onended=null;try{a.currentTime=0;}catch(e){}}curEl=null;}
+function aPlay(k,loop,then){const a=AUD[k];a.loop=!!loop;a.volume=muted?0:.5;a.onended=then||null;curEl=a;try{a.currentTime=0;}catch(e){}const p=a.play();if(p&&p.catch)p.catch(()=>{});}
+function musicSync(){
+  if(audioState!=='ok'||!ac)return;
+  const st=G.state;
+  const key=st==='brief'?'credit':st==='over'?'over':st==='win'?'win':st==='play'?(G.boss?'boss':'main'):null;
+  if(key!==curKey){
+    const prev=curKey;curKey=key;aStop();
+    if(key==='credit')aPlay('credit',false);
+    else if(key==='main'){
+      if(prev==='credit')aPlay('start',false,()=>{if(curKey==='main')aPlay('main',true);});
+      else aPlay('main',true);
+    }
+    else if(key==='boss')aPlay('bi',false,()=>{if(curKey==='boss')aPlay('bl',true);});
+    else if(key==='over')aPlay('over',false);
+    else if(key==='win')aPlay('win',true);
+  }
+  if(curEl){
+    curEl.volume=muted?0:.5;
+    if(paused!==wasPaused){if(paused)curEl.pause();else{const p=curEl.play();if(p&&p.catch)p.catch(()=>{});}}
+  }
+  wasPaused=paused;
+}
 const SC=[0,3,5,7,10];let mstep=0,nextT=0;
 const mf=n=>55*Math.pow(2,n/12);
 function musicStep(t){
@@ -96,7 +132,7 @@ function musicStep(t){
 }
 function startMusic(){
   nextT=ac.currentTime+.1;
-  setInterval(()=>{if(!ac)return;while(nextT<ac.currentTime+.3){if(G&&G.state!=='over'&&!paused)musicStep(nextT);nextT+=60/150/2;}},60);
+  setInterval(()=>{if(!ac)return;while(nextT<ac.currentTime+.3){if(audioState==='none'&&G&&G.state!=='over'&&!paused)musicStep(nextT);nextT+=60/150/2;}},60);
 }
 
 /* ---------- input ---------- */
@@ -1281,10 +1317,10 @@ let last=0;
 function frame(ts){
   const dt=Math.min(.033,(ts-last)/1000||0);last=ts;
   if(!paused||G.state!=='play')update(dt);
-  render();requestAnimationFrame(frame);
+  musicSync();render();requestAnimationFrame(frame);
 }
 function jump(st,boss){G.stage=st;G.themes.push({row:Math.ceil(scroll/90)+1,s:st});G.en.length=0;G.eb.length=0;G.boss=null;G.bossT=boss?STG[st].bt+1:0;G.grade=STG[st].grade.slice();G.p.inv=999;G.nag=false;G.state='play';}
-window.__neon={advance,setScroll(v){scroll=v;},jump,update,render,get G(){return G;},startGame,keys,changeForm};
+window.__neon={audio:()=>({state:audioState,key:curKey,el:curEl&&Object.keys(AUD).find(k=>AUD[k]===curEl),t:curEl&&curEl.currentTime,paused:curEl&&curEl.paused}),advance,setScroll(v){scroll=v;},jump,update,render,get G(){return G;},startGame,keys,changeForm};
 if(document.fonts&&document.fonts.load){document.fonts.load('40px "Black Ops One"');document.fonts.load('500 14px Oswald');}
 requestAnimationFrame(frame);
 })();
