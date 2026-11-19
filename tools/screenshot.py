@@ -1,0 +1,25 @@
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    b=p.chromium.launch(executable_path='/usr/bin/google-chrome',args=['--no-sandbox'])
+    pg=b.new_page(viewport={'width':540,'height':960})
+    errs=[];pg.on('pageerror',lambda e:errs.append(str(e)))
+    pg.goto('file:///home/claude/game/index.html');pg.wait_for_timeout(500)
+    pg.screenshot(path='/home/claude/t_title.png')
+    pg.keyboard.press('Space');pg.wait_for_timeout(900)
+    pg.screenshot(path='/home/claude/t_brief0.png')
+    pg.keyboard.press('Space');pg.wait_for_timeout(300)
+    print(pg.evaluate("__neon.G.state"))
+    pg.evaluate("__neon.jump(5,true)")
+    pg.evaluate("for(let i=0;i<60*6;i++)__neon.update(1/60);__neon.G.boss.hp=1")
+    pg.evaluate("for(let i=0;i<60*5;i++)__neon.update(1/60)")
+    pg.wait_for_timeout(300);pg.screenshot(path='/home/claude/t_win0.png')
+    print(pg.evaluate("__neon.G.state"))
+    pg.evaluate("__neon.advance()");pg.wait_for_timeout(300)
+    pg.screenshot(path='/home/claude/t_win1.png')
+    # briefing 5 and 3
+    pg.evaluate("__neon.advance()");pg.wait_for_timeout(200)
+    pg.keyboard.press('Space');pg.wait_for_timeout(400)
+    for st in (3,5):
+        pg.evaluate(f"__neon.jump({st},false);__neon.G.state='brief';__neon.G.briefT=1")
+        pg.wait_for_timeout(300);pg.screenshot(path=f'/home/claude/t_brief{st}.png')
+    print(errs);b.close()
