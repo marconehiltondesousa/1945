@@ -9,6 +9,6 @@ Feito para ensinar a história da guerra a uma criança de 8 anos.
 - `history/`: versões anteriores · `tools/`: teste de fumaça e capturas de tela
 
 ## Áudio
-O jogo procura os arquivos de música na pasta `audio/` (não versionada, de uso local/privado):
+O jogo procura os arquivos de música na pasta `audio/` (versionada só porque o repositório é privado; não torne o repositório público com esses arquivos):
 `credit.mp3` (briefing), `start.mp3` (início da fase), `main.mp3` (fase), `boss-intro.mp3` + `boss-loop.mp3` (chefe),
 `gameover.mp3`, `nameentry.mp3` (fim da guerra). Sem a pasta, o jogo usa a música sintetizada.
