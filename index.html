@@ -391,7 +391,7 @@ function updateBoss(dt){
       }
       G.stage++;G.waveT=3;
       if(G.lives<5)G.pk.push({x:b.x,y:b.y,t:0});
-      G.themes.push({row:Math.ceil(scroll/90)+1,s:G.stage});
+      G.themes.push({row:Math.floor((scroll-H)/90)-2,s:G.stage});G.en.length=0;G.eb.length=0;G.grade=STG[Math.min(G.stage,5)].grade.slice();
       G.state='brief';G.briefT=0;G.briefPage=0;G.briefPT=0;
     }
     return;
