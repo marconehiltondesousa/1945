@@ -490,7 +490,6 @@ function loseWing(i){
 }
 function playerHit(){
   const p=G.p;if(p.inv>0||p.dead>0)return;
-  if(G.wing.length){loseWing(G.wing.length-1);return;}
   boom(p.x,p.y,40,'orange',12);sfx('big');G.lives--;G.combo=0;G.mult=1;p.dead=1.1;
   if(G.lives<=0){G.overT=1.6;}
 }
@@ -554,7 +553,7 @@ function update(dt){
     }
     if(b.dead)continue;
     for(const r of G.rec){
-      if(Math.hypot(r.x-b.x,r.y-b.y)<18){r.dead=true;b.dead=true;captureRec(r);break;}
+      if(!r.free&&Math.hypot(r.x-b.x,r.y-b.y)<18){r.free=true;r.fT=0;b.dead=true;sfx('hit');boom(r.x,r.y,10,'green',1.6);floatTxt(r.x,r.y-24,'RESGATE!','#8fe39a');break;}
     }
     if(b.dead)continue;
     if(G.boss&&G.boss.dying<=0&&inBoss(b.x,b.y,2)){hurtBoss(.5);b.dead=true;G.parts.push({x:b.x,y:b.y,vx:0,vy:0,life:.15,max:.8,sz:14,g:'white'});}
@@ -572,7 +571,20 @@ function update(dt){
   for(const e of G.en){updateEn(e,dt);if(e.air&&e.delay<=0&&!e.dead&&targetsHit(e.x,e.y,e.r)){hurt(e,e.type==='gun'?3:99);}}
   G.en=G.en.filter(e=>!e.dead);
   updateBoss(dt);
-  for(const r of G.rec){r.age+=dt;r.y=-30+r.age*95;r.x=W/2+Math.sin(r.age*1.4+r.ph)*r.amp;if(r.y>H+30)r.dead=true;}
+  for(const r of G.rec){
+    r.age+=dt;
+    if(!r.free){r.y=-30+r.age*95;r.x=W/2+Math.sin(r.age*1.4+r.ph)*r.amp;if(r.y>H+30)r.dead=true;}
+    else{
+      r.fT+=dt;const ty=H-230+Math.sin(r.fT*2.2)*6;
+      r.y+=(ty-r.y)*Math.min(1,dt*3);
+      const dx=p.x-r.x,sp=165*dt;r.x+=Math.max(-sp,Math.min(sp,dx));
+      if(p.dead<=0&&G.state==='play'){
+        let hit=Math.hypot(r.x-p.x,r.y-p.y)<34;
+        for(const w of G.wing)if(Math.hypot(r.x-w.x,r.y-w.y)<30)hit=true;
+        if(hit){r.dead=true;captureRec(r);}
+      }
+    }
+  }
   G.rec=G.rec.filter(r=>!r.dead);
   // enemy bullets
   for(const b of G.eb){b.x+=b.vx*dt;b.y+=b.vy*dt;if(b.x<-30||b.x>W+30||b.y<-30||b.y>H+30)b.dead=true;else if(targetsHit(b.x,b.y,b.r))b.dead=true;}
@@ -1735,6 +1747,7 @@ function render(){
   for(const r of G.rec){
     drawPlane(r.x,r.y,.75,...REC,Math.cos(r.age*1.4+r.ph),G.t,0,{mark:1});
     ctx.strokeStyle=`rgba(143,227,154,${.5+.3*Math.sin(G.t*8)})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(r.x,r.y,26+Math.sin(G.t*6)*2,0,TAU);ctx.stroke();
+    if(r.free)txt('ENCOSTE!',r.x,r.y-38,13,'#8fe39a','center','Oswald',600);
   }
   for(const e of G.en)if(e.air&&e.delay<=0)drawEnemy(e);
   const p=G.p;
